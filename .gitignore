@@ -1,0 +1,19 @@
+# Java / Spring Boot
+backend/target/
+backend/bin/
+
+# Eclipse / STS
+backend/.settings/
+backend/.classpath
+backend/.project
+
+# React
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+
+# Environment / secrets
+.env
+*.env
