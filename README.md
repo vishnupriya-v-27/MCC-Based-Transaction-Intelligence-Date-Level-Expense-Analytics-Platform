@@ -1,82 +1,399 @@
-# Ledger — MCC-based expense tracker
+# MCC-Based Transaction Intelligence & Date-Level Expense Analytics Platform
 
-Java 21 + Spring Boot 3.3 + MySQL backend, React frontend. Imports a statement CSV (enriched with an MCC column), auto-categorizes each transaction into a fixed set of buckets (Food & Dining, Travel & Transport, Income, etc.), and gives you an overall report plus a day-by-day drill-down.
+A personal finance analytics platform that automatically categorizes transaction data using **Merchant Category Codes (MCC)** and provides **date-level transaction drill-down** for more precise spending analysis.
 
-## How categorization works (in order, first match wins)
+Built from a real-world usability problem: most payment applications provide spending summaries primarily at monthly or yearly levels, making it difficult to quickly inspect and summarize transactions for a **specific day**. The system addresses this by combining structured MCC-based categorization with detailed daily transaction analytics.
 
-1. Income check — if PhonePe marked the row CREDIT, it's Income. This never depends on MCC.
-2. Cache — has this exact payee been resolved before (automatically or manually)? Reuse it.
-3. MCC — a real MCC code on the row, matched against the seeded ISO 18245 mapping table.
-4. P2P — no MCC / explicit N/A, treated as a person-to-person transfer.
-5. Keyword fallback — known merchant name fragments (SWIGGY, UBER, AMAZON, etc.).
-6. Business/person heuristic — rough guess based on business-name markers (PVT, LTD, STORE...).
-7. Needs review — nothing matched; surfaced honestly instead of guessed.
+## Problem Statement
 
-Every automatic or manual resolution is written into payee_category_cache, so the next transaction from the same payee is a single lookup instead of a full re-run.
+When reviewing personal transactions, two problems became apparent:
 
-## Backend setup (Spring Tool Suite / Eclipse)
+* Transaction descriptions are inconsistent and unreliable for automatically identifying merchant categories.
+* Monthly or yearly spending summaries make it difficult to answer simple questions such as **"How much did I spend on the day I went out?"**
 
-1. Create the MySQL database (or let it auto-create): the app is configured to auto-create expense_tracker on first connection via createDatabaseIfNotExist=true. Just make sure MySQL is running locally and the credentials below match your setup.
+An initial approach using fuzzy matching on transaction descriptions proved difficult to scale because merchant names and descriptions can vary significantly. Maintaining large collections of merchant-specific rules also becomes increasingly difficult as transaction volume grows.
 
-2. Open backend/src/main/resources/application.properties and check/update:
+This project uses **MCC as a structured categorization signal** while retaining additional fallback mechanisms for transactions where MCC information is unavailable.
 
-```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/expense_tracker?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC
-spring.datasource.username=root
-spring.datasource.password=root
+## Key Features
+
+* **MCC-based automatic transaction categorization**
+* CSV statement import with flexible column/header matching
+* Multi-level categorization strategy with fallback handling
+* Payee-level category caching for previously resolved merchants
+* Manual category correction
+* **Date-level transaction drill-down**
+* Overall expense and income reporting
+* Category-wise expense summaries
+* Support for P2P transactions where MCC is unavailable
+* Transactions requiring uncertain classification are explicitly marked for review rather than being incorrectly categorized
+
+## Categorization Strategy
+
+Transactions are categorized using the following priority order:
+
+```text
+Transaction
+     │
+     ▼
+Income Check
+     │
+     ▼
+Payee Category Cache
+     │
+     ▼
+MCC Mapping
+     │
+     ▼
+P2P Detection
+     │
+     ▼
+Merchant Keyword Fallback
+     │
+     ▼
+Business / Person Heuristic
+     │
+     ▼
+Needs Review
 ```
 
-3. In Spring Tool Suite: File → Update → Clean -> Maven → . Let it download dependencies.
+### 1. Income Detection
 
-4. Run ExpenseTrackerApplication.java as a Spring Boot App . Tables are created automatically (spring.jpa.hibernate.ddl-auto=update), and the MCC lookup table is seeded on first startup.
+If the transaction is marked as `CREDIT`, it is classified as **Income** without relying on MCC.
 
-5. Backend runs on http://localhost:8080.
+### 2. Payee Category Cache
 
-## Frontend setup
+Previously resolved payees are checked first.
 
-```bash
-cd frontend
-npm install
-npm start
+Both automatic and manual resolutions are stored in `payee_category_cache`, allowing future transactions from the same payee to be categorized through a direct lookup.
+
+### 3. MCC Classification
+
+Transactions containing a valid MCC are matched against the application's seeded MCC-to-category mapping based on **ISO 18245 merchant category classifications**.
+
+### 4. P2P Detection
+
+Transactions without a usable MCC or explicitly marked as `N/A` can be treated as person-to-person transfers rather than forcing them into a merchant category.
+
+### 5. Keyword Fallback
+
+Known merchant fragments can be used when MCC information is unavailable.
+
+Examples include:
+
+```text
+SWIGGY
+UBER
+AMAZON
 ```
 
-Runs on http://localhost:3000 and talks to the backend at http://localhost:8080/api.
+### 6. Business / Person Heuristic
 
-## CSV format expected
+Business-name indicators such as `PVT`, `LTD`, `STORE`, etc. provide an additional heuristic when stronger signals are unavailable.
 
-Headers are matched case-insensitively and can be in any order. Extra columns are ignored.
+### 7. Needs Review
 
-| Purpose              | Accepted header names (any one)                                       |
-| -------------------- | --------------------------------------------------------------------- |
-| Date                 | Date, Transaction Date, Txn Date                                      |
-| Payee                | Description, Payee, Merchant, Narration, Details, Transaction Details |
-| Type                 | Type, Transaction Type, Dr/Cr                                         |
-| Amount               | Amount, Amount (INR), Amount (Rs)                                     |
-| MCC (optional)       | MCC, MCC Code — use N/A for P2P transfers with no merchant            |
-| Reference (optional) | Reference, UTR, Transaction ID, Ref No                                |
+If no reliable rule matches, the transaction is surfaced for review instead of making an unreliable guess.
 
-Example row:
+## Date-Level Expense Analytics
+
+A key feature of the application is **date-level drill-down**.
+
+Instead of only presenting:
+
+```text
+August 2026
+Total Spending: ₹25,000
+```
+
+the application allows users to move from an overall report into individual dates:
+
+```text
+August 20
+    ├── Restaurant       ₹850
+    ├── Transport        ₹240
+    └── Shopping         ₹1,200
+
+August 21
+    ├── Food             ₹450
+    └── Transport        ₹180
+```
+
+This makes it easier to investigate and summarize spending associated with a particular day or event without manually searching through an entire transaction history.
+
+## Technology Stack
+
+### Backend
+
+* Java 21
+* Spring Boot
+* Spring Web
+* Spring Data JPA
+* Hibernate
+* Maven
+* MySQL
+
+### Frontend
+
+* React
+* JavaScript
+* CSS
+
+### Data Processing
+
+* CSV statement parsing
+* MCC-based categorization
+* Merchant/payee matching
+* Category caching
+
+## System Architecture
+
+```text
+                CSV Transaction Statement
+                         │
+                         ▼
+                 CSV Import Service
+                         │
+                         ▼
+              Transaction Processing
+                         │
+                         ▼
+             Categorization Service
+              │       │       │
+              │       │       └── Fallback Rules
+              │       └────────── MCC Mapping
+              └────────────────── Payee Cache
+                         │
+                         ▼
+                      MySQL
+                         │
+                         ▼
+                   REST APIs
+                         │
+                         ▼
+                  React Frontend
+                    │         │
+                    ▼         ▼
+               Dashboard   Date Drilldown
+```
+
+## CSV Import
+
+The importer supports flexible headers and does not require a fixed column order.
+
+Headers are matched case-insensitively.
+
+| Purpose   | Accepted Headers                                                      |
+| --------- | --------------------------------------------------------------------- |
+| Date      | Date, Transaction Date, Txn Date                                      |
+| Payee     | Description, Payee, Merchant, Narration, Details, Transaction Details |
+| Type      | Type, Transaction Type, Dr/Cr                                         |
+| Amount    | Amount, Amount (INR), Amount (Rs)                                     |
+| MCC       | MCC, MCC Code                                                         |
+| Reference | Reference, UTR, Transaction ID, Ref No                                |
+
+MCC is optional. `N/A` can be used for transactions where MCC is unavailable, such as P2P transfers.
+
+Example:
 
 ```csv
 Date,Transaction Details,Type,Amount,MCC
 12/08/2026,SWIGGY BANGALORE,DEBIT,458,5812
 ```
 
-## Project structure
+## Database Design
+
+The application uses MySQL with the following primary entities:
 
 ```text
-backend/
-  src/main/java/com/expensetracker/
-    entity/        Transaction, PayeeCategoryCache, MccCategoryMapping, enums
-    repository/     Spring Data JPA repositories
-    service/        CsvImportService, CategorizationService, ReportService, DataSeedService
-    controller/     TransactionController, ReportController
-    config/         CORS config
-  src/main/resources/application.properties
-frontend/
-  src/
-    components/     UploadPage, Dashboard, DateDrilldown, TransactionTable
-    api.js          fetch wrapper for the backend
-    App.js          tab navigation shell
-    styles/app.css  ledger/passbook visual theme
+Transaction
+     │
+     ├── Category
+     │
+     ├── PayeeCategoryCache
+     │
+     └── MccCategoryMapping
 ```
+
+### Main Components
+
+* `Transaction` — stores imported transaction records
+* `MccCategoryMapping` — stores MCC-to-category mappings
+* `PayeeCategoryCache` — stores previously resolved payees
+* `AppCategory` — represents supported expense/income categories
+
+## Project Structure
+
+```text
+expense-tracker/
+│
+├── backend/
+│   ├── src/main/java/com/expensetracker/
+│   │   │
+│   │   ├── entity/
+│   │   │   ├── Transaction.java
+│   │   │   ├── PayeeCategoryCache.java
+│   │   │   ├── MccCategoryMapping.java
+│   │   │   ├── AppCategory.java
+│   │   │   └── TransactionType.java
+│   │   │
+│   │   ├── repository/
+│   │   │   ├── TransactionRepository.java
+│   │   │   ├── PayeeCategoryCacheRepository.java
+│   │   │   └── MccCategoryMappingRepository.java
+│   │   │
+│   │   ├── service/
+│   │   │   ├── CsvImportService.java
+│   │   │   ├── CategorizationService.java
+│   │   │   ├── ReportService.java
+│   │   │   └── DataSeedService.java
+│   │   │
+│   │   ├── controller/
+│   │   │   ├── TransactionController.java
+│   │   │   └── ReportController.java
+│   │   │
+│   │   ├── dto/
+│   │   │   ├── CategorySummaryDTO.java
+│   │   │   ├── CategoryUpdateRequest.java
+│   │   │   ├── ReportSummaryDTO.java
+│   │   │   └── TransactionDTO.java
+│   │   │
+│   │   ├── config/
+│   │   │   └── CorsConfig.java
+│   │   │
+│   │   └── ExpenseTrackerApplication.java
+│   │
+│   ├── src/main/resources/
+│   │   └── application.properties
+│   │
+│   └── pom.xml
+│
+├── frontend/
+│   ├── public/
+│   │   └── index.html
+│   │
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── UploadPage.js
+│   │   │   ├── Dashboard.js
+│   │   │   ├── DateDrilldown.js
+│   │   │   └── TransactionTable.js
+│   │   │
+│   │   ├── api.js
+│   │   │   └── API communication with backend
+│   │   │
+│   │   ├── App.js
+│   │   │   └── Tab navigation shell
+│   │   │
+│   │   ├── index.js
+│   │   │
+│   │   └── styles/
+│   │       └── app.css
+│   │           └── Ledger / passbook visual theme
+│   │
+│   ├── package.json
+│   └── package-lock.json
+│
+├── .gitignore
+└── README.md
+```
+## Running the Application
+
+### Prerequisites
+
+* Java 21
+* Maven
+* MySQL
+* Node.js and npm
+
+### Backend
+
+1. Create a MySQL database or allow the application to create it automatically.
+2. Configure the database credentials using your local environment/configuration.
+3. Navigate to the backend:
+
+```bash
+cd backend
+```
+
+4. Run:
+
+```bash
+mvn spring-boot:run
+```
+
+The backend runs on:
+
+```text
+http://localhost:8080
+```
+
+### Frontend
+
+Navigate to the frontend:
+
+```bash
+cd frontend
+```
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Start the application:
+
+```bash
+npm start
+```
+
+The frontend runs on:
+
+```text
+http://localhost:3000
+```
+
+and communicates with the backend through:
+
+```text
+http://localhost:8080/api
+```
+
+## Engineering Decisions
+
+### Why MCC?
+
+Transaction descriptions alone are not always reliable enough for categorization. Merchant names can be inconsistent, abbreviated, or represented differently across transactions.
+
+The initial fuzzy-matching approach also required maintaining increasingly large merchant-specific rules.
+
+MCC provides a structured merchant classification signal that can be used before applying less reliable text-based heuristics.
+
+### Why a Payee Cache?
+
+Once a user or the categorization system has resolved a payee, repeating the complete categorization process for every future transaction is unnecessary.
+
+The cache allows previously resolved payees to be categorized efficiently while also learning from manual corrections.
+
+### Why Date-Level Drill-Down?
+
+A monthly total tells a user **how much** they spent but not necessarily **when** the spending occurred.
+
+Date-level drill-down provides a more useful way to investigate individual days, trips, outings, or events without searching through the complete transaction history.
+
+## Future Improvements
+
+* Support for additional bank/UPI statement formats
+* Improved merchant normalization
+* More advanced transaction classification
+* User-specific category customization
+* Authentication and multi-user support
+* Advanced spending trends and visualizations
+* Export of categorized transaction reports
+
+## Project Motivation
+
+This project originated from a real-world personal finance problem rather than a generic CRUD application.
+
+The goal was to explore how structured transaction metadata, rule-based categorization, caching, REST APIs, and date-level analytics could be combined to create a more useful personal finance experience.
