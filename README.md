@@ -26,9 +26,9 @@ spring.datasource.username=root
 spring.datasource.password=root
 ```
 
-3. In Spring Tool Suite: File → Import → Maven → Existing Maven Projects, point it at the backend folder. Let it download dependencies.
+3. In Spring Tool Suite: File → Update → Clean -> Maven → . Let it download dependencies.
 
-4. Run ExpenseTrackerApplication.java as a Spring Boot App (or mvn spring-boot:run from a terminal in backend/). Tables are created automatically (spring.jpa.hibernate.ddl-auto=update), and the MCC lookup table is seeded on first startup.
+4. Run ExpenseTrackerApplication.java as a Spring Boot App . Tables are created automatically (spring.jpa.hibernate.ddl-auto=update), and the MCC lookup table is seeded on first startup.
 
 5. Backend runs on http://localhost:8080.
 
