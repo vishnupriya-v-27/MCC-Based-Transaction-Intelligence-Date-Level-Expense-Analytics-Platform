@@ -385,12 +385,9 @@ Date-level drill-down provides a more useful way to investigate individual days,
 ## Future Improvements
 
 * Support for additional bank/UPI statement formats
-* Improved merchant normalization
-* More advanced transaction classification
-* User-specific category customization
 * Authentication and multi-user support
 * Advanced spending trends and visualizations
-* Export of categorized transaction reports
+
 
 ## Project Motivation
 
